@@ -62,6 +62,21 @@ def test_parse_step_with_reverse_action():
     assert tts["data"]["reverse"] is True
 
 
+def test_parse_step_with_seconds_action():
+    step = "Cuire [[ACTION:5 sec/50C/3]] puis arrêter."
+
+    result = parse_step_with_annotations(step)
+
+    text = result["text"]
+    ann = result["annotations"]
+
+    assert "5 sec/50°C/vitesse 3" in text
+
+    tts = ann[0]
+    assert tts["type"] == "TTS"
+    assert tts["data"]["time"] == 5
+
+
 def test_build_instructions_from_steps_mixed():
     steps = [
         "Préparer les ingrédients.",

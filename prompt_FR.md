@@ -25,13 +25,17 @@ Marquage d’Annotations pour les Instructions Avancées
 
 Pour me permettre de générer automatiquement les annotations Thermomix (temps, température, vitesse, et références d’ingrédients), tu dois utiliser le marquage inline suivant À L’INTÉRIEUR des textes d’étapes :
 
-- [[ACTION:30 min/65C/3]] → signifie « cuire 30 min / 65°C / vitesse 3 »
+- [[ACTION:30 min/65C/3]] → signifie « cuire 30 minutes / 65°C / vitesse 3 »
+- [[ACTION:30 sec/65C/3]] → signifie « cuire 30 secondes / 65°C / vitesse 3 »
 - [[ACTION:30 min/65C/3/R]] → idem, mais avec sens inverse (R = reverse / sens inverse)
 - [[INGREDIENT:eau]] → marque le mot « eau » comme ingrédient dans cette étape
 
 Règles :
 - Garde toujours la phrase en langage naturel lisible autour des marqueurs.
 - Place les marqueurs exactement là où tu veux que le temps/vitesse/ingrédient s’appliquent.
+- Le segment de temps de ACTION DOIT être un nombre entier suivi de `min` (minutes) ou `sec` (secondes).  
+  - ✅ Autorisé : `5 min`, `10 min`, `30 min`, `5 sec`, `30 sec`  
+  - ❌ Interdit : `0,5 min`, `90 s`, `5 secondes` (utilise `5 sec` à la place)
 - NE mets PAS d’unité dans la partie vitesse de ACTION (juste un nombre, par ex. 3, 2, 1).
 
 Je transformerai automatiquement ces marqueurs en annotations Cookidoo (comme dans NOTES.md), avec les bons offsets, donc tu n’as pas besoin de gérer toi-même les objets JSON d’annotation ni les positions.
