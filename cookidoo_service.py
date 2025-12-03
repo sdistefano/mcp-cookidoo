@@ -5,7 +5,7 @@ Module to encapsulate all cookidoo-api logic for interacting with the Cookidoo p
 """
 
 import os
-from typing import Optional
+from typing import Optional, Any, Dict, List
 from dotenv import load_dotenv
 from aiohttp import ClientSession
 from cookidoo_api import Cookidoo, CookidooConfig
@@ -14,6 +14,7 @@ from cookidoo_api.helpers import (
 )
 import aiohttp
 import time
+import re
 
 
 def load_cookidoo_credentials() -> tuple[str, str]:
@@ -213,3 +214,202 @@ class CookidooService:
     def api_client(self) -> Optional[Cookidoo]:
         """Get the current API client instance."""
         return self._api_client
+
+    async def update_custom_recipe(
+        self,
+        recipe_id: str,
+        update_data: Dict[str, Any],
+    ) -> None:
+        """
+        Update an existing custom recipe using the undocumented API.
+
+        This helper expects a *complete* recipe payload, as the PATCH endpoint
+        requires all mandatory fields to be present. It can be used to send
+        advanced instructions with annotations.
+
+        Example structure for annotated instructions (see NOTES.md):
+
+            {
+              "instructions": [
+                {
+                  "type": "STEP",
+                  "text": "test30 min/65°C/vitesse 3 eau",
+                  "annotations": [
+                    {
+                      "type": "TTS",
+                      "data": {
+                        "speed": "3",
+                        "time": 1800,
+                        "temperature": {"value": "65", "unit": "C"}
+                      },
+                      "position": {"offset": 4, "length": 21}
+                    },
+                    {
+                      "type": "INGREDIENT",
+                      "data": {"description": "eau"},
+                      "position": {"offset": 26, "length": 3}
+                    }
+                  ]
+                }
+              ]
+            }
+
+        Args:
+            recipe_id: ID of the existing custom recipe
+                      (e.g. "01KBHZPGSKAHAJATWQR23PWYM8").
+            update_data: Full JSON-serializable payload to send in the PATCH
+                        request. Must include all mandatory recipe fields.
+
+        Raises:
+            Exception: If authentication is missing or the update fails.
+        """
+        if not self._api_client or not self._session:
+            raise Exception("Not authenticated. Please call login() first.")
+
+        try:
+            auth_data = self._api_client.auth_data
+            if not auth_data:
+                raise Exception("No authentication data available")
+
+            localization = self._api_client.localization
+            url_parts = localization.url.split("/")
+            base_url = f"{url_parts[0]}//{url_parts[2]}"
+            locale = localization.language
+
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {auth_data.access_token}",
+            }
+
+            api_session = self._api_client._session
+            update_url = f"{base_url}/created-recipes/{locale}/{recipe_id}"
+
+            async with api_session.patch(
+                update_url, json=update_data, headers=headers
+            ) as response:
+                response_text = await response.text()
+                print(f"Update custom recipe status: {response.status}")
+                print(f"Update custom recipe body: {response_text}")
+
+                if response.status not in [200, 204]:
+                    raise Exception(
+                        f"Failed to update custom recipe {recipe_id}: "
+                        f"HTTP {response.status} - {response_text}"
+                    )
+
+        except Exception as e:
+            raise Exception(f"Failed to update custom recipe: {str(e)}") from e
+
+    @staticmethod
+    def _parse_custom_recipes_html(html: str, base_url: str) -> List[Dict[str, str]]:
+        """
+        Parse the created-recipes HTML page and extract custom recipe tiles.
+
+        The HTML structure looks like:
+            <core-tiles-list>
+              <core-tile id="cr-01KBHZPGSKAHAJATWQR23PWYM8">
+                <a href="/created-recipes/fr-FR/01KBHZPGSKAHAJATWQR23PWYM8">
+                  ...
+                  <p class="core-tile__description-text"> test </p>
+                  ...
+
+        We extract:
+          - recipe_id: "01KBHZPGSKAHAJATWQR23PWYM8"
+          - name: inner text of .core-tile__description-text
+          - url: absolute URL to the recipe page
+        """
+        recipes: List[Dict[str, str]] = []
+
+        # Find each tile region by its \"cr-\" id, without assuming a specific tag
+        id_pattern = re.compile(
+            r'id=\"cr-(?P<id>[^\"]+)\"',
+            re.IGNORECASE,
+        )
+
+        # Inside each tile region, find the href to the recipe and the description text
+        href_pattern = re.compile(
+            r'<a[^>]*href="(?P<href>/created-recipes[^"]+)"',
+            re.IGNORECASE,
+        )
+        name_pattern = re.compile(
+            r'<p[^>]*class=\"[^\"]*core-tile__description-text[^\"]*\"[^>]*>(?P<name>.*?)</p>',
+            re.DOTALL | re.IGNORECASE,
+        )
+
+        id_matches = list(id_pattern.finditer(html))
+
+        for idx, match in enumerate(id_matches):
+            recipe_id = match.group("id").strip()
+
+            # Define a slice of HTML that likely contains this tile's content:
+            # from this id up to the next id (or end of document).
+            start = match.start()
+            end = id_matches[idx + 1].start() if idx + 1 < len(id_matches) else len(html)
+            tile_html = html[start:end]
+
+            href_match = href_pattern.search(tile_html)
+            name_match = name_pattern.search(tile_html)
+
+            if not href_match or not name_match:
+                continue
+
+            href = href_match.group("href").strip()
+            name_html = name_match.group("name")
+            # Very lightweight HTML cleanup for the name
+            name = re.sub(r"<[^>]+>", "", name_html).strip()
+
+            # Build absolute URL
+            url = f"{base_url}{href}"
+
+            recipes.append(
+                {
+                    "id": recipe_id,
+                    "name": name,
+                    "url": url,
+                }
+            )
+
+        return recipes
+
+    async def list_custom_recipes(self) -> List[Dict[str, str]]:
+        """
+        List your custom recipes by scraping the created-recipes page.
+
+        It calls the authenticated created-recipes page
+        (e.g. https://cookidoo.fr/created-recipes/fr-FR) and parses the HTML
+        tiles to return basic information about each recipe.
+
+        Returns:
+            List of dictionaries with at least:
+              - "id": recipe id (e.g. "01KBHZPGSKAHAJATWQR23PWYM8")
+              - "name": recipe name (e.g. "test")
+              - "url": full URL to the recipe page
+        """
+        if not self._api_client or not self._session:
+            raise Exception("Not authenticated. Please call login() first.")
+
+        localization = self._api_client.localization
+        url_parts = localization.url.split("/")
+        base_url = f"{url_parts[0]}//{url_parts[2]}"
+        locale = localization.language
+
+        # This is the same URL you see in the browser location bar
+        created_recipes_url = f"{base_url}/created-recipes/{locale}"
+
+        # Optionally enrich the request with a browser cookie from .env;
+        # this is needed because the HTML UI uses a separate CIAM login.
+        from dotenv import load_dotenv  # local import to avoid circular issues
+
+        load_dotenv()
+        browser_cookie = os.getenv("COOKIDOO_COOKIE")
+
+        headers = {}
+        if browser_cookie:
+            headers["Cookie"] = browser_cookie
+
+        api_session = self._api_client._session
+        async with api_session.get(created_recipes_url, headers=headers) as response:
+            html = await response.text()
+
+        return self._parse_custom_recipes_html(html, base_url)

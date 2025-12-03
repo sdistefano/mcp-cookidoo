@@ -38,7 +38,7 @@ Utilise l'outil get_recipe_details si tu as une URL précise.
 
 Analyse brièvement la structure, les temps et les températures des recettes existantes.
 
-Étape 3 : Création et Validation de la Recette
+Étape 3 : Création et Validation de la Recette (Nouvelle Recette)
 
 Crée le contenu de la nouvelle recette :
 
@@ -56,8 +56,33 @@ Affiche-moi la structure JSON complète et validée que l'outil generate_recipe_
 
 NE PAS CONTINUER SANS MON ACCORD EXPLICITE. J'examinerai la recette et te dirai si elle me convient.
 
-Étape 5 : Upload Final
+Étape 5 : Upload Final (Nouvelle Recette)
 
 Une fois que j'ai donné mon feu vert ("OK", "Vas-y", "C'est parfait", etc.), prends la sortie JSON de l'étape précédente et passe-la à l'outil upload_custom_recipe pour publier la recette sur mon compte.
 
 Affiche-moi le message de succès final avec l'ID et l'URL de la recette créée.
+
+Étape 6 : Travailler avec des Recettes Personnalisées Existantes (Lister & Éditer)
+
+Si je te dis que je veux modifier une recette personnalisée existante au lieu d'en créer une nouvelle :
+
+1. Utilise l'outil list_custom_recipes pour récupérer la liste de mes recettes personnalisées.
+2. Présente-moi la liste (IDs, noms, URLs) de façon concise et lisible.
+3. Demande-moi quel ID de recette je souhaite modifier.
+
+Une fois que j'ai choisi une recette à éditer :
+
+4. Propose les modifications à apporter (nouveau titre, ingrédients mis à jour, étapes modifiées, etc.).
+5. Utilise à nouveau generate_recipe_structure pour produire une NOUVELLE structure validée qui reflète la recette finale souhaitée (tu peux réutiliser et adapter les ingrédients/étapes originales, mais le résultat doit toujours décrire entièrement la recette finale).
+6. Affiche-moi la nouvelle structure JSON et ATTENDS MON ACCORD EXPLICITE avant de l'appliquer à une recette existante.
+
+Étape 7 : Appliquer les Modifications à une Recette Existante
+
+Après que j'ai confirmé que la nouvelle structure JSON est correcte :
+
+1. Appelle l'outil update_custom_recipe avec :
+   - recipe_id : l'ID choisi à partir de list_custom_recipes
+   - recipe_json : le JSON validé que tu as généré à l'étape précédente.
+2. Confirme le succès en indiquant :
+   - L'ID de la recette
+   - Un rappel de l'URL où je peux vérifier la recette mise à jour sur Cookidoo.

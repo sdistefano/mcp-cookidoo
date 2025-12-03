@@ -252,3 +252,97 @@ async def upload_custom_recipe(recipe_json: str) -> str:
         
     except Exception as e:
         return f"Upload failed: {str(e)}"
+
+
+@mcp.tool()
+async def list_custom_recipes() -> str:
+    """
+    List your custom recipes stored in Cookidoo.
+
+    This tool scrapes the \"created recipes\" page using your browser cookie
+    (COOKIDOO_COOKIE in .env) and returns a JSON list of recipes with:
+      - id
+      - name
+      - url
+
+    You must be connected first using connect_to_cookidoo.
+    """
+    global _cookidoo_service, _cookidoo_api
+
+    try:
+        if not _cookidoo_service or not _cookidoo_api:
+            return "Not connected. Please run 'connect_to_cookidoo' first."
+
+        recipes = await _cookidoo_service.list_custom_recipes()
+        return json.dumps(recipes, indent=2, ensure_ascii=False)
+
+    except Exception as e:
+        return f"Failed to list custom recipes: {str(e)}"
+
+
+@mcp.tool()
+async def update_custom_recipe(recipe_id: str, recipe_json: str) -> str:
+    """
+    Update an existing custom recipe on Cookidoo.
+
+    This tool works similarly to upload_custom_recipe, but instead of creating
+    a new recipe it updates an existing one identified by recipe_id.
+
+    Workflow:
+      1. Generate a new recipe structure with generate_recipe_structure
+         (or use an edited JSON structure).
+      2. Show it to the user for confirmation.
+      3. After explicit approval, call update_custom_recipe with:
+           - recipe_id: ID from list_custom_recipes
+           - recipe_json: the validated JSON to apply.
+    """
+    global _cookidoo_service, _cookidoo_api
+
+    try:
+        if not _cookidoo_service or not _cookidoo_api:
+            return "Not connected. Please run 'connect_to_cookidoo' first."
+
+        # Parse and validate the incoming JSON using the same schema
+        try:
+            data = json.loads(recipe_json)
+            recipe = CustomRecipe(**data)
+        except json.JSONDecodeError as e:
+            return f"Invalid JSON: {str(e)}"
+        except Exception as e:
+            return f"Invalid recipe data: {str(e)}"
+
+        # Map our validated structure into the low-level Cookidoo payload
+        update_data = {
+            "name": recipe.name,
+            "image": None,
+            "isImageOwnedByUser": False,
+            "tools": ["TM6"],
+            "yield": {"value": recipe.servings, "unitText": "portion"},
+            "prepTime": recipe.prep_time * 60,
+            "cookTime": 0,
+            "totalTime": recipe.total_time * 60,
+            "ingredients": [
+                {"type": "INGREDIENT", "text": ing} for ing in recipe.ingredients
+            ],
+            "instructions": [{"type": "STEP", "text": step} for step in recipe.steps],
+            "hints": (
+                "\n".join(recipe.hints)
+                if recipe.hints and isinstance(recipe.hints, list)
+                else (recipe.hints if recipe.hints else "")
+            ),
+            "workStatus": "PRIVATE",
+            "recipeMetadata": {
+                "requiresAnnotationsCheck": False,
+            },
+        }
+
+        await _cookidoo_service.update_custom_recipe(recipe_id, update_data)
+
+        return (
+            "Recipe updated successfully!\n\n"
+            f"Recipe ID: {recipe_id}\n"
+            "You can open the recipe on Cookidoo to verify the changes."
+        )
+
+    except Exception as e:
+        return f"Update failed: {str(e)}"

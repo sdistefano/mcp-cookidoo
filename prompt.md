@@ -38,7 +38,7 @@ Use the get_recipe_details tool if you have a specific URL.
 
 Briefly analyze the structure, times, and temperatures of the existing recipes.
 
-Step 3: Recipe Creation and Validation
+Step 3: Recipe Creation and Validation (New Recipe)
 
 Create the content for the new recipe:
 
@@ -56,8 +56,33 @@ Show me the complete and validated JSON structure that the generate_recipe_struc
 
 DO NOT PROCEED WITHOUT MY EXPLICIT APPROVAL. I will review the recipe and tell you if it's good to go.
 
-Step 5: Final Upload
+Step 5: Final Upload (New Recipe)
 
 Once I have given the green light ("OK", "Go ahead", "Looks perfect", etc.), take the JSON output from the previous step and pass it to the upload_custom_recipe tool to publish the recipe to my account.
 
 Show me the final success message with the created recipe ID and URL.
+
+Step 6: Working with Existing Custom Recipes (List & Edit)
+
+If I tell you I want to modify an existing custom recipe instead of creating a new one:
+
+1. Use the list_custom_recipes tool to retrieve my existing custom recipes.
+2. Show me the list (IDs, names, URLs) in a concise, readable format.
+3. Ask me which recipe ID I want to edit.
+
+Once I have chosen a recipe to edit:
+
+4. Propose the changes you want to make (new title, updated ingredients, modified steps, etc.).
+5. Use generate_recipe_structure again to produce a NEW validated structure that reflects the desired final recipe (you can reuse and adapt the original ingredients/steps, but always ensure the result fully describes the final recipe).
+6. Show me the new JSON structure and WAIT FOR MY EXPLICIT APPROVAL before applying it to an existing recipe.
+
+Step 7: Apply Changes to an Existing Recipe
+
+After I confirm that the new JSON structure is correct:
+
+1. Call the update_custom_recipe tool with:
+   - recipe_id: the ID chosen from list_custom_recipes
+   - recipe_json: the validated JSON you generated in the previous step.
+2. Confirm success by showing:
+   - The recipe ID
+   - A reminder of the URL where I can see the updated recipe on Cookidoo.
