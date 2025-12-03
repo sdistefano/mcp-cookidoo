@@ -21,6 +21,21 @@ Example of a good instruction:
 "Place the onion, halved, into the mixing bowl, then chop 5 sec / speed 5. Scrape down the sides of the mixing bowl with the spatula."
 "Add the olive oil and sauté for 3 min / 120°C / reverse 🔄 / speed 1."
 
+Annotation Markup for Advanced Instructions
+
+To allow me to automatically generate Thermomix annotations (time, temperature, speed, and ingredient references), you must use the following inline markup INSIDE your step texts:
+
+- [[ACTION:30 min/65C/3]] → means “cook 30 min / 65°C / speed 3”
+- [[ACTION:30 min/65C/3/R]] → same, but in reverse (R = reverse)
+- [[INGREDIENT:eau]] → marks the word “eau” as an ingredient reference in this step
+
+Rules:
+- Always keep the natural-language sentence readable around the markers.
+- Place the markers exactly where you want the timing/speed/ingredient to apply.
+- Do NOT include units in the ACTION speed part (just a number, e.g. 3, 2, 1).
+
+I will automatically transform these markers into the internal Cookidoo “annotations” format used in NOTES.md, including correct offsets, so you do not need to reason about offsets or JSON annotation objects yourself.
+
 Interaction Process (MCP Tool Workflow)
 You must use the MCP tools I have provided in the following order. Wait for my validation after each key step.
 

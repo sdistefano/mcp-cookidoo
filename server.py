@@ -241,7 +241,7 @@ async def upload_custom_recipe(recipe_json: str) -> str:
             servings=recipe.servings,
             prep_time=recipe.prep_time,
             total_time=recipe.total_time,
-            hints=recipe.hints
+            hints=recipe.hints,
         )
         
         # Get localization for URL
@@ -324,6 +324,9 @@ async def update_custom_recipe(recipe_id: str, recipe_json: str) -> str:
             "ingredients": [
                 {"type": "INGREDIENT", "text": ing} for ing in recipe.ingredients
             ],
+            # For updates we currently keep steps as plain STEP instructions.
+            # If you want to support [[ACTION:...]] / [[INGREDIENT:...]] in updates
+            # as well, we can later introduce the same annotation builder here.
             "instructions": [{"type": "STEP", "text": step} for step in recipe.steps],
             "hints": (
                 "\n".join(recipe.hints)

@@ -15,6 +15,7 @@ from cookidoo_api.helpers import (
 import aiohttp
 import time
 import re
+from annotations import build_instructions_from_steps
 
 
 def load_cookidoo_credentials() -> tuple[str, str]:
@@ -173,7 +174,7 @@ class CookidooService:
                 if not recipe_id:
                     raise Exception("No recipe ID returned from creation")
             
-            # Step 2: Update recipe with ingredients
+            # Step 2: Update recipe with ingredients and (optional) annotations
             update_url = f"{base_url}/created-recipes/{locale}/{recipe_id}"
             
             # PATCH requires a complete recipe structure with ALL required fields
@@ -187,7 +188,7 @@ class CookidooService:
                 "cookTime": 0,
                 "totalTime": total_time * 60,  # Convert minutes to seconds
                 "ingredients": [{"type": "INGREDIENT", "text": ing} for ing in ingredients],
-                "instructions": [{"type": "STEP", "text": step} for step in steps],
+                "instructions": build_instructions_from_steps(steps),
                 "hints": "\n".join(hints) if hints and isinstance(hints, list) else (hints if hints else ""),
                 "workStatus": "PRIVATE",
                 "recipeMetadata": {
