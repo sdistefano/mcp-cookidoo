@@ -7,6 +7,7 @@ Main server file containing MCP tool definitions for interacting with Cookidoo.
 from fastmcp import FastMCP
 from cookidoo_service import CookidooService, load_cookidoo_credentials
 from schemas import CustomRecipe
+from annotations import instructions_to_steps, text_steps_to_marker_steps
 import json
 
 # Initialize FastMCP server
@@ -349,3 +350,68 @@ async def update_custom_recipe(recipe_id: str, recipe_json: str) -> str:
 
     except Exception as e:
         return f"Update failed: {str(e)}"
+
+
+@mcp.tool()
+async def read_recipe(recipe_id: str) -> str:
+    """
+    Read a custom recipe by ID and translate its instructions back into
+    the marker-based language with [[ACTION:...]] and [[INGREDIENT:...]].
+
+    Returns a JSON string with at least:
+      - id
+      - name
+      - ingredients: list of ingredient texts
+      - steps: list of steps using the marker language
+    """
+    global _cookidoo_service, _cookidoo_api
+
+    try:
+        if not _cookidoo_service or not _cookidoo_api:
+            return "Not connected. Please run 'connect_to_cookidoo' first."
+
+        raw = await _cookidoo_service.get_custom_recipe(recipe_id)
+
+        # Name can live either at top level or inside recipeContent
+        recipe_content = raw.get("recipeContent") or {}
+        name = raw.get("name") or raw.get("recipeName") or recipe_content.get("name") or ""
+
+        # Ingredients can be in low-level API format or as a simple list of strings
+        ingredients: list[str] = []
+        if "ingredients" in raw:
+            for ing in raw.get("ingredients", []):
+                if isinstance(ing, dict) and ing.get("type") == "INGREDIENT":
+                    text = ing.get("text")
+                    if text:
+                        ingredients.append(text)
+        else:
+            # Fallback to recipeContent.recipeIngredient (list of strings)
+            for text in recipe_content.get("recipeIngredient", []) or []:
+                if isinstance(text, str) and text.strip():
+                    ingredients.append(text.strip())
+
+        # Instructions: prefer structured form with annotations if present,
+        # otherwise fall back to recipeInstructions text list.
+        if "instructions" in raw:
+            instructions = raw.get("instructions") or []
+            steps = instructions_to_steps(instructions)
+        else:
+            steps_plain = []
+            for s in recipe_content.get("recipeInstructions", []) or []:
+                if isinstance(s, str) and s.strip():
+                    steps_plain.append(s.strip())
+            # Best-effort: convert timing fragments like '7 min/120°C/vitesse 1/sens inverse'
+            # into [[ACTION:...]] markers.
+            steps = text_steps_to_marker_steps(steps_plain)
+
+        result = {
+            "id": recipe_id,
+            "name": name,
+            "ingredients": ingredients,
+            "steps": steps,
+        }
+
+        return json.dumps(result, indent=2, ensure_ascii=False)
+
+    except Exception as e:
+        return f"Failed to read recipe: {str(e)}"

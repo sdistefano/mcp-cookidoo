@@ -373,6 +373,42 @@ class CookidooService:
 
         return recipes
 
+    async def get_custom_recipe(self, recipe_id: str) -> Dict[str, Any]:
+        """
+        Fetch the raw JSON for a custom (created) recipe by ID using the
+        undocumented created-recipes API.
+
+        This is useful for reading back instructions and annotations.
+        """
+        if not self._api_client or not self._session:
+            raise Exception("Not authenticated. Please call login() first.")
+
+        auth_data = self._api_client.auth_data
+        if not auth_data:
+            raise Exception("No authentication data available")
+
+        localization = self._api_client.localization
+        url_parts = localization.url.split("/")
+        base_url = f"{url_parts[0]}//{url_parts[2]}"
+        locale = localization.language
+
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {auth_data.access_token}",
+        }
+
+        api_session = self._api_client._session
+        recipe_url = f"{base_url}/created-recipes/{locale}/{recipe_id}"
+
+        async with api_session.get(recipe_url, headers=headers) as response:
+            if response.status != 200:
+                text = await response.text()
+                raise Exception(
+                    f"Failed to fetch custom recipe {recipe_id}: "
+                    f"HTTP {response.status} - {text}"
+                )
+            return await response.json()
+
     async def list_custom_recipes(self) -> List[Dict[str, str]]:
         """
         List your custom recipes by scraping the created-recipes page.

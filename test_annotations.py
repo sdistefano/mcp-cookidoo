@@ -1,6 +1,10 @@
 import pytest
 
-from annotations import parse_step_with_annotations, build_instructions_from_steps
+from annotations import (
+    parse_step_with_annotations,
+    build_instructions_from_steps,
+    instructions_to_steps,
+)
 
 
 def test_parse_step_with_single_action_and_ingredient_matches_notes_shape():
@@ -98,3 +102,16 @@ def test_build_instructions_from_steps_mixed():
     assert "annotations" in second
     assert any(a["type"] == "TTS" for a in second["annotations"])
     assert any(a["type"] == "INGREDIENT" for a in second["annotations"])
+
+
+def test_instructions_to_steps_roundtrip():
+    original_step = "Cuire [[ACTION:5 min/100C/1/R]] puis ajouter [[INGREDIENT:eau]]."
+    instructions = build_instructions_from_steps([original_step])
+
+    # Now go back from instructions to steps
+    steps = instructions_to_steps(instructions)
+
+    assert len(steps) == 1
+    # The roundtrip should preserve our marker language (order and payloads)
+    assert "[[ACTION:5 min/100C/1/R]]" in steps[0]
+    assert "[[INGREDIENT:eau]]" in steps[0]

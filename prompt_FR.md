@@ -37,6 +37,8 @@ Règles :
   - ✅ Autorisé : `5 min`, `10 min`, `30 min`, `5 sec`, `30 sec`  
   - ❌ Interdit : `0,5 min`, `90 s`, `5 secondes` (utilise `5 sec` à la place)
 - NE mets PAS d’unité dans la partie vitesse de ACTION (juste un nombre, par ex. 3, 2, 1).
+- Le segment de température dans ACTION est optionnel. Si tu l’omets et écris par exemple
+  `[[ACTION:5 sec/7]]`, le système supposera `0C` en interne.
 
 Je transformerai automatiquement ces marqueurs en annotations Cookidoo (comme dans NOTES.md), avec les bons offsets, donc tu n’as pas besoin de gérer toi-même les objets JSON d’annotation ni les positions.
 

@@ -5,6 +5,16 @@ from typing import Any, Dict, List, Tuple
 ACTION_PATTERN = re.compile(r"\[\[ACTION:([^\]]+)\]\]")
 INGREDIENT_PATTERN = re.compile(r"\[\[INGREDIENT:([^\]]+)\]\]")
 
+# Heuristic matcher for plain-text ACTION patterns inside recipeInstructions,
+# e.g. "7 min/120°C/vitesse 1/sens inverse"
+ACTION_TEXT_PATTERN = re.compile(
+    r"(?P<time>\d+\s*(?:min|sec|m|s))\s*/\s*"
+    r"(?P<temp>(?:\d+|Varoma))(?:\s*[°]?\s*C)?\s*/\s*"
+    r"v(?:itesse)?\s*(?P<speed>\d+)"
+    r"(?P<rev>/sens inverse)?",
+    re.IGNORECASE,
+)
+
 
 def _parse_action_payload(payload: str) -> Tuple[str, Dict[str, Any]]:
     """Parse an ACTION payload like "30 min/50C/3" or "30 min/50C/3/R".
@@ -13,12 +23,18 @@ def _parse_action_payload(payload: str) -> Tuple[str, Dict[str, Any]]:
       - human-readable text to insert into the step (e.g. "30 min/50°C/vitesse 3")
       - annotation data dict for the TTS annotation
     """
-    # Split by '/': time_part, temp_part, speed_part[, reverse]
+    # Split by '/': time_part, [temp_part], speed_part[, reverse]
     parts = [p.strip() for p in payload.split("/") if p.strip()]
-    if len(parts) < 3:
+    if len(parts) < 2:
         raise ValueError(f"Invalid ACTION payload: {payload!r}")
 
-    time_part, temp_part, speed_part, *rest = parts
+    if len(parts) == 2:
+        # Allow shorthand payloads like "5 sec/7" (no temperature segment).
+        time_part, speed_part = parts
+        temp_part = "0C"  # will be normalized below
+        rest: list[str] = []
+    else:
+        time_part, temp_part, speed_part, *rest = parts
 
     # Time: be very forgiving, support minutes or seconds with many spellings.
     # Examples: "5 min", "5min", "5 m", "5", "5 sec", "5s", "5sec", "5 seconds"
@@ -189,3 +205,143 @@ def build_instructions_from_steps(steps: List[str]) -> List[Dict[str, Any]]:
         instructions.append(instruction)
 
     return instructions
+
+
+def _build_action_payload_from_data(data: Dict[str, Any]) -> str:
+    """Inverse of _parse_action_payload: TTS data -> ACTION payload string."""
+    time_seconds = int(data.get("time", 0))
+    if time_seconds <= 0:
+        time_str = "0 sec"
+    elif time_seconds % 60 == 0:
+        minutes = time_seconds // 60
+        time_str = f"{minutes} min"
+    else:
+        time_str = f"{time_seconds} sec"
+
+    temp = data.get("temperature") or {}
+    temp_value = temp.get("value")
+    if temp_value is not None:
+        temp_str = f"{temp_value}C"
+    else:
+        temp_str = ""
+
+    speed = data.get("speed", "")
+
+    # Base payload: time/temp/speed
+    parts = [time_str]
+    if temp_str:
+        parts.append(temp_str)
+    else:
+        parts.append("")  # keep slash position if temperature missing
+    parts.append(str(speed))
+
+    payload = "/".join(parts)
+
+    if data.get("reverse"):
+        payload += "/R"
+
+    return payload
+
+
+def instructions_to_steps(instructions: List[Dict[str, Any]]) -> List[str]:
+    """Convert Cookidoo instructions + annotations back into marker-based steps.
+
+    - STEP instructions without annotations -> plain text
+    - STEP instructions with TTS / INGREDIENT annotations:
+      replace the annotated spans with [[ACTION:...]] or [[INGREDIENT:...]].
+    """
+    steps: List[str] = []
+
+    for instr in instructions:
+        if instr.get("type") != "STEP":
+            # For now, skip non-step instructions or just take their text as-is.
+            text = instr.get("text", "")
+            steps.append(text)
+            continue
+
+        text = instr.get("text", "")
+        anns = instr.get("annotations") or []
+
+        if not anns:
+            steps.append(text)
+            continue
+
+        # Process annotations from right to left so offsets remain valid
+        anns_sorted = sorted(anns, key=lambda a: a.get("position", {}).get("offset", 0), reverse=True)
+
+        for ann in anns_sorted:
+            pos = ann.get("position") or {}
+            offset = int(pos.get("offset", 0))
+            length = int(pos.get("length", 0))
+
+            if length <= 0 or offset < 0 or offset + length > len(text):
+                continue
+
+            if ann.get("type") == "TTS":
+                payload = _build_action_payload_from_data(ann.get("data") or {})
+                marker = f"[[ACTION:{payload}]]"
+            elif ann.get("type") == "INGREDIENT":
+                desc = (ann.get("data") or {}).get("description", "")
+                marker = f"[[INGREDIENT:{desc}]]"
+            else:
+                # Unknown annotation type, leave as-is
+                continue
+
+            text = text[:offset] + marker + text[offset + length :]
+
+        steps.append(text)
+
+    return steps
+
+
+def _normalize_time_token(token: str) -> str:
+    """Normalize a time token like '7min', '7 min', '7sec', '7 s' to '7 min' or '7 sec'."""
+    m = re.match(r"^(?P<value>\d+)\s*(?P<unit>min|m|sec|s)?$", token.strip(), re.IGNORECASE)
+    if not m:
+        return token.strip()
+    value = int(m.group("value"))
+    unit = (m.group("unit") or "min").lower()
+    if unit in {"min", "m"}:
+        return f"{value} min"
+    else:
+        return f"{value} sec"
+
+
+def _normalize_temp_token(token: str) -> str:
+    """Normalize a temperature token like '120', '120C', 'Varoma' to something usable in ACTION."""
+    t = token.strip()
+    if not t:
+        return ""
+    if t.lower().startswith("varoma"):
+        return "Varoma"
+    m = re.match(r"^(?P<value>\d+)", t)
+    if not m:
+        return t
+    return f"{m.group('value')}C"
+
+
+def text_step_to_marker_step(step: str) -> str:
+    """Heuristically convert plain-text Thermomix timing/speed fragments into [[ACTION:...]] markers."""
+
+    def _repl(match: re.Match) -> str:
+        time_raw = match.group("time") or ""
+        temp_raw = match.group("temp") or ""
+        speed = (match.group("speed") or "").strip()
+        rev = match.group("rev")
+
+        time_seg = _normalize_time_token(time_raw)
+        temp_seg = _normalize_temp_token(temp_raw)
+
+        payload_parts = [time_seg, temp_seg, speed]
+        payload = "/".join(payload_parts)
+        if rev:
+            payload += "/R"
+
+        return f"[[ACTION:{payload}]]"
+
+    return ACTION_TEXT_PATTERN.sub(_repl, step)
+
+
+def text_steps_to_marker_steps(steps: List[str]) -> List[str]:
+    """Apply text_step_to_marker_step to a list of plain-text steps."""
+    return [text_step_to_marker_step(s) for s in steps]
