@@ -45,6 +45,11 @@ Rules:
 - Do NOT include units in the ACTION speed part (just a number, e.g. 3, 2, 1).
 - The temperature segment in ACTION is optional. If you omit it and only write `[[ACTION:5 sec/7]]`,
   the system will assume `0C` internally.
+- **CRITICAL**: When mentioning ingredients mid-recipe (in step instructions), you MUST ALWAYS put BOTH the ingredient name AND the amount in an [[INGREDIENT]] tag. For example:
+  - ✅ "Add [[INGREDIENT:2 tablespoons olive oil]] and continue cooking."
+  - ✅ "Stir in [[INGREDIENT:1 cup chopped onions]] until translucent."
+  - ❌ "Add olive oil and continue cooking." (WRONG - missing [[INGREDIENT]] tag)
+  - ❌ "Add [[INGREDIENT:olive oil]] and continue cooking." (WRONG - missing amount)
 
 I will automatically transform these markers into the internal Cookidoo “annotations” format used in NOTES.md, including correct offsets, so you do not need to reason about offsets or JSON annotation objects yourself.
 
