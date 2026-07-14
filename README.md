@@ -61,6 +61,34 @@ An MCP (Model Context Protocol) server for interacting with the Thermomix Cookid
 - `list_custom_recipes` - List your custom (customer) recipes via HTML scraping
 - `update_custom_recipe` - Update an existing custom recipe using a validated JSON structure
 
+### CLI (`bin/cookidoo`)
+
+The same functionality is available as a standalone command-line tool, handy for
+quick use without running the MCP server. Each invocation authenticates inline
+using your `.env` credentials and emits JSON on stdout (debug chatter goes to
+stderr).
+
+```bash
+# One-time: create the venv and install deps (see Setup above), then optionally
+# symlink the launcher onto your PATH:
+ln -sf "$(pwd)/bin/cookidoo" ~/.local/bin/cookidoo
+
+cookidoo connect                 # verify credentials by logging in
+cookidoo list                    # list your custom recipes
+cookidoo read <recipe_id>        # read a recipe back in [[ACTION:...]] marker language
+cookidoo raw  <recipe_id>        # dump the raw created-recipe JSON
+cookidoo get  r59322             # official recipe details by ID
+cookidoo validate recipe.json    # validate a recipe structure offline
+cookidoo create recipe.json      # create a new custom recipe
+cookidoo update <recipe_id> -    # update a recipe from JSON on stdin
+```
+
+Recipe input for `validate`/`create`/`update` accepts a file path, a literal JSON
+string, or `-` to read from stdin. Run `cookidoo <command> --help` for details.
+
+See **[CLI.md](./CLI.md)** for the full command reference, the `[[ACTION:...]]` /
+`[[INGREDIENT:...]]` marker language, and examples.
+
 ### Acknowledgments
 
 This project is built on top of the `[cookidoo-api](https://github.com/miaucl/cookidoo-api)`, which provides the Python interface to interact with the Cookidoo platform. Special thanks for making this integration possible!

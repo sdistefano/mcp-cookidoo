@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Thin launcher for the Cookidoo CLI (cli.py).
+#
+# Resolves its own location (following symlinks, so it works when symlinked into
+# ~/.local/bin) and runs cli.py with the project's virtualenv interpreter,
+# falling back to system python3 if the venv is missing.
+set -euo pipefail
+
+SOURCE="$(readlink -f "${BASH_SOURCE[0]}")"
+REPO_ROOT="$(cd "$(dirname "$SOURCE")/.." && pwd)"
+
+PY="$REPO_ROOT/.venv/bin/python"
+[[ -x "$PY" ]] || PY="python3"
+
+exec "$PY" "$REPO_ROOT/cli.py" "$@"
