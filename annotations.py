@@ -1,7 +1,6 @@
 import re
 from typing import Any, Dict, List, Tuple
 
-
 ACTION_PATTERN = re.compile(r"\[\[ACTION:([^\]]+)\]\]")
 INGREDIENT_PATTERN = re.compile(r"\[\[INGREDIENT:([^\]]+)\]\]")
 
@@ -43,13 +42,15 @@ def _parse_action_payload(payload: str) -> Tuple[str, Dict[str, Any]]:
         raise ValueError(f"Invalid ACTION time segment: {time_part!r}")
 
     time_value = int(m_time.group("value"))
-    rest = m_time.group("rest").strip().lower()
+    # Named time_rest: the earlier version reused `rest`, which silently clobbered the
+    # list of trailing segments and lost the reverse flag ("/R") every time.
+    time_rest = m_time.group("rest").strip().lower()
 
     # Decide minutes vs seconds based on the rest of the string.
     # Default to minutes when nothing is specified.
-    if not rest:
+    if not time_rest:
         unit = "min"
-    elif "min" in rest or rest == "m":
+    elif "min" in time_rest or time_rest == "m":
         unit = "min"
     else:
         # Anything else (sec, s, seconds, etc.) -> seconds
@@ -267,7 +268,9 @@ def instructions_to_steps(instructions: List[Dict[str, Any]]) -> List[str]:
             continue
 
         # Process annotations from right to left so offsets remain valid
-        anns_sorted = sorted(anns, key=lambda a: a.get("position", {}).get("offset", 0), reverse=True)
+        anns_sorted = sorted(
+            anns, key=lambda a: a.get("position", {}).get("offset", 0), reverse=True
+        )
 
         for ann in anns_sorted:
             pos = ann.get("position") or {}
@@ -296,7 +299,9 @@ def instructions_to_steps(instructions: List[Dict[str, Any]]) -> List[str]:
 
 def _normalize_time_token(token: str) -> str:
     """Normalize a time token like '7min', '7 min', '7sec', '7 s' to '7 min' or '7 sec'."""
-    m = re.match(r"^(?P<value>\d+)\s*(?P<unit>min|m|sec|s)?$", token.strip(), re.IGNORECASE)
+    m = re.match(
+        r"^(?P<value>\d+)\s*(?P<unit>min|m|sec|s)?$", token.strip(), re.IGNORECASE
+    )
     if not m:
         return token.strip()
     value = int(m.group("value"))
